@@ -14,9 +14,16 @@ phases:
     commands:
       # O gitleaks precisa do histórico completo do Git (opção "Full clone" na origem do pipeline).
       - git config --global --add safe.directory "$CODEBUILD_SRC_DIR"
+      # Trava: sem o .git, o gitleaks varre 0 commits e PASSA em silêncio. Aqui o build falha de propósito.
+      - git rev-parse --is-inside-work-tree || { echo "ERRO - a origem do pipeline nao esta como Clone completo (Full clone)"; exit 1; }
       - git fetch --unshallow --quiet || true
       - gitleaks git . --redact --verbose
-      # pip-audit: falha (código de saída 1) se alguma dependência tiver vulnerabilidade conhecida.
-      - pip-audit -r requirements.txt
-      # Bandit: código da aplicação, fora de tests/ e scripts/, só severidade média ou alta (-ll).
-      - bandit -r . -x ./tests,./scripts -ll
+      # pip-audit e Bandit rodam SEMPRE os dois, para todos os achados aparecerem no mesmo log.
+      # O build só falha no final, se algum dos dois encontrou problema.
+      - |
+        FALHA=0
+        echo "===== pip-audit (SCA) ====="
+        pip-audit -r requirements.txt || FALHA=1
+        echo "===== Bandit (SAST) ====="
+        bandit -r . -x ./tests,./scripts -ll || FALHA=1
+        test "$FALHA" -eq 0
