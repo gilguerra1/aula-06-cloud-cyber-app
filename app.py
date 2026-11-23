@@ -16,7 +16,7 @@ dúvida sobre por que isso importa).
 import os
 import time
 from datetime import datetime, timezone
-import threading
+
 import psycopg2
 import psycopg2.extras
 from flask import Flask, jsonify, redirect, render_template, request, url_for
@@ -131,7 +131,10 @@ def index():
 def criar_nota():
     texto = request.form.get("texto", "").strip()
     if texto:
-        threading.Thread(target=salvar_nota, args=(texto,)).start()
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("INSERT INTO notas (texto) VALUES (%s);", (texto,))
+            conn.commit()
     return redirect(url_for("index"))
 
 
@@ -143,8 +146,6 @@ try:
     ensure_schema()
 except Exception as exc:  # noqa: BLE001
     print(f"[notas-da-nuvem] aviso: não consegui garantir o schema ainda: {exc}")
-
-    
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=APP_PORT) # nosec B104
